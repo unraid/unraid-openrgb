@@ -9,6 +9,7 @@ version=""
 repository=""
 release_tag=""
 package_path=""
+plugin_url=""
 output_dir="${SCRIPT_DIR}/out"
 
 die() {
@@ -28,6 +29,7 @@ Options:
   --repository VALUE    GitHub repository that hosts the release assets.
   --release-tag VALUE   GitHub release tag that hosts the package assets.
   --package PATH        Generic Unraid .txz package to install.
+  --plugin-url URL      URL used by Unraid for plugin updates.
   --output-dir PATH     Directory for openrgb.plg. (default: packaging/slackware/out)
   -h, --help            Show this help.
 EOF
@@ -59,6 +61,11 @@ while [ "$#" -gt 0 ]; do
             package_path="$2"
             shift 2
             ;;
+        --plugin-url)
+            [ "$#" -ge 2 ] || die "--plugin-url needs a URL"
+            plugin_url="$2"
+            shift 2
+            ;;
         --output-dir)
             [ "$#" -ge 2 ] || die "--output-dir needs a path"
             output_dir="$2"
@@ -83,6 +90,12 @@ valid_value "$version" || die "invalid OpenRGB version: $version"
     || die "invalid GitHub repository: $repository"
 [[ "$release_tag" =~ ^[A-Za-z0-9._/-]+$ ]] \
     || die "invalid GitHub release tag: $release_tag"
+if [ -n "$plugin_url" ]; then
+    [[ "$plugin_url" =~ ^https://[^[:space:]]+$ ]] \
+        || die "invalid plugin URL: $plugin_url"
+else
+    plugin_url="https://github.com/${repository}/releases/latest/download/openrgb.plg"
+fi
 
 [ -f "$package_path" ] || die "package does not exist: $package_path"
 
@@ -100,7 +113,6 @@ else
     die "required command is missing: md5sum or md5"
 fi
 package_url="https://github.com/${repository}/releases/download/${release_tag}/${package_name}"
-plugin_url="https://github.com/${repository}/releases/latest/download/openrgb.plg"
 plugin_path="${output_dir}/openrgb.plg"
 checksum_path="${output_dir}/${package_name}.md5"
 

@@ -93,5 +93,10 @@ to package a specific release. The generated plugin uses the stable
 `releases/latest/download/openrgb.plg` URL, so future package releases can be
 found without changing the installation URL.
 
+For a prerelease tag, the workflow builds from the source tag, applies the
+patch in `patches/msi-z890-carbon-wifi.patch`, and marks the GitHub release as
+a prerelease. The prerelease plugin points to its exact release asset instead
+of the stable update URL.
+
 The workflow skips a release when its package already exists. Run it manually
 with `upstream_tag` to build a specific upstream release.

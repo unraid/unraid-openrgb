@@ -31,7 +31,9 @@ libraries.
 ## Run a build manually
 
 Use the **Check for OpenRGB updates** workflow and enter an upstream tag such
-as `release_1.0`. Leave the field empty to use the newest stable release.
+as `release_1.0`. Leave the field empty to use the newest stable release. A
+prerelease tag such as `release_candidate_1.0rc3.1` creates a separate GitHub
+prerelease and applies the MSI Z890 Carbon WiFi mapping patch.
 
 The workflow is the supported release path. For a local Linux build, provide
 an OpenRGB source checkout explicitly:
