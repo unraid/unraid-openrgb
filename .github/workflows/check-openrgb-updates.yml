@@ -111,7 +111,8 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libegl1 libglvnd0 libopengl0
+          sudo apt-get install --no-install-recommends -y \
+            libegl1 libglvnd0 libopengl0 squashfs-tools
 
       - name: Read OpenRGB version
         if: env.PACKAGE_EXISTS == 'false'
@@ -170,6 +171,8 @@ jobs:
             --workdir /workspace \
             "$BUILD_IMAGE" \
             bash -lc '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y squashfs-tools
               ./packaging/slackware/build-package.sh \
                 --build-appimage \
                 --source-root /workspace/upstream \

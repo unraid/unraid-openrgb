@@ -154,6 +154,25 @@ valid_value "$qt" || die "invalid Qt value: $qt"
 source_root="$(absolute_path "$source_root")"
 [ -d "$source_root" ] || die "OpenRGB source tree does not exist: $source_root"
 
+extract_appimage_squashfs() {
+    local destination="$1"
+    local offset
+
+    require_command grep
+    require_command unsquashfs
+
+    while IFS=: read -r offset _; do
+        [[ "$offset" =~ ^[0-9]+$ ]] || continue
+        if unsquashfs -no-progress -offset "$offset" \
+            -d "${destination}/squashfs-root" "$appimage" >/dev/null 2>&1; then
+            return 0
+        fi
+        rm -rf "${destination}/squashfs-root"
+    done < <(grep --binary-files=text --byte-offset --only-matching 'hsqs' "$appimage")
+
+    die "could not extract AppImage: $appimage"
+}
+
 if [ "$build_appimage" -eq 1 ] && { [ -n "$appimage" ] || [ -n "$appdir" ]; }; then
     die "--build-appimage cannot be combined with --appimage or --appdir"
 fi
@@ -222,11 +241,17 @@ if [ -n "$appimage" ]; then
     else
         extract_dir="${extract_root}/no-fuse"
         mkdir -p "$extract_dir"
-        (
+        if (
             cd "$extract_dir"
             APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --appimage-extract >/dev/null
-        )
-        source_appdir="${extract_dir}/squashfs-root"
+        ); then
+            source_appdir="${extract_dir}/squashfs-root"
+        else
+            extract_dir="${extract_root}/squashfs"
+            mkdir -p "$extract_dir"
+            extract_appimage_squashfs "$extract_dir"
+            source_appdir="${extract_dir}/squashfs-root"
+        fi
     fi
 fi
 
