@@ -246,26 +246,30 @@ trap cleanup EXIT
 source_appdir="$appdir"
 if [ -n "$appimage" ]; then
     extract_root="${temp_dir}/appimage"
-    extract_dir="${extract_root}/standard"
-    mkdir -p "$extract_dir"
-    if (
-        cd "$extract_dir"
-        "$appimage" --appimage-extract >/dev/null
-    ); then
+    if command -v unsquashfs >/dev/null 2>&1; then
+        extract_dir="${extract_root}/squashfs"
+        mkdir -p "$extract_dir"
+        extract_appimage_squashfs "$extract_dir"
         source_appdir="${extract_dir}/squashfs-root"
     else
-        extract_dir="${extract_root}/no-fuse"
+        extract_dir="${extract_root}/standard"
         mkdir -p "$extract_dir"
         if (
             cd "$extract_dir"
-            APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --appimage-extract >/dev/null
+            "$appimage" --appimage-extract >/dev/null
         ); then
             source_appdir="${extract_dir}/squashfs-root"
         else
-            extract_dir="${extract_root}/squashfs"
+            extract_dir="${extract_root}/no-fuse"
             mkdir -p "$extract_dir"
-            extract_appimage_squashfs "$extract_dir"
-            source_appdir="${extract_dir}/squashfs-root"
+            if (
+                cd "$extract_dir"
+                APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --appimage-extract >/dev/null
+            ); then
+                source_appdir="${extract_dir}/squashfs-root"
+            else
+                die "unsquashfs is missing and AppImage extraction failed: $appimage"
+            fi
         fi
     fi
 fi
