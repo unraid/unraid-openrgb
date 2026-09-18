@@ -202,6 +202,7 @@ jobs:
                 --udev-rules /workspace/upstream/60-openrgb.rules \
                 --version "$OPENRGB_VERSION"
             '
+          sudo chown -R "$(id -u):$(id -g)" packaging/slackware/out
 
       - name: Generate the Unraid plugin file
         if: env.PACKAGE_EXISTS == 'false'
