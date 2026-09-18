@@ -144,7 +144,7 @@ jobs:
           set -euo pipefail
           git clone --depth 1 --branch "$UPSTREAM_TAG" --single-branch \
             "https://codeberg.org/${UPSTREAM_REPOSITORY}.git" upstream
-          git -C upstream apply patches/msi-z890-carbon-wifi.patch
+          git -C upstream apply "$GITHUB_WORKSPACE/patches/msi-z890-carbon-wifi.patch"
 
       - name: Build the package from the upstream AppImage
         if: env.PACKAGE_EXISTS == 'false' && env.UPSTREAM_PRERELEASE != 'true'
