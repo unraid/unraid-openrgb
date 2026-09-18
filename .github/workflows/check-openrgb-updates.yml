@@ -162,10 +162,32 @@ jobs:
         run: |
           set -euxo pipefail
           docker pull "$BUILD_IMAGE"
-          container_name="openrgb-prerelease-${GITHUB_RUN_ID}"
-          docker create --name "$container_name" \
+          set +e
+          docker run --rm \
             --env DEB_HOST_ARCH=amd64 \
             --env DEB_HOST_GNU_CPU=x86_64 \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            "$BUILD_IMAGE" \
+            bash -lc '
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y squashfs-tools
+              cd /workspace/upstream
+              unset SOURCE_DATE_EPOCH
+              source ./scripts/build-appimage.sh qt6
+              trap - EXIT
+              exit 0
+            '
+          build_status=$?
+          set -e
+          if [ "$build_status" -ne 0 ]; then
+            test -x upstream/OpenRGB-x86_64.AppImage
+            test -s upstream/60-openrgb.rules
+            printf 'warning: AppImage build returned status %s after producing expected outputs; continuing\n' \
+              "$build_status" >&2
+          fi
+          test -x upstream/OpenRGB-x86_64.AppImage
+          docker run --rm \
             --env OPENRGB_VERSION \
             --env SOURCE_DATE_EPOCH \
             --volume "$GITHUB_WORKSPACE:/workspace" \
@@ -175,23 +197,10 @@ jobs:
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y squashfs-tools
               ./packaging/slackware/build-package.sh \
-                --build-appimage \
+                --appimage /workspace/upstream/OpenRGB-x86_64.AppImage \
                 --source-root /workspace/upstream \
                 --version "$OPENRGB_VERSION"
             '
-          set +e
-          docker start --attach "$container_name"
-          start_status=$?
-          set -e
-          container_status="$(docker wait "$container_name")"
-          docker rm "$container_name" >/dev/null
-          if [ "$container_status" -ne 0 ]; then
-            exit "$container_status"
-          fi
-          if [ "$start_status" -ne 0 ]; then
-            printf 'warning: docker attach returned status %s after the container exited successfully\n' \
-              "$start_status" >&2
-          fi
 
       - name: Generate the Unraid plugin file
         if: env.PACKAGE_EXISTS == 'false'
