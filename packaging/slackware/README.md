@@ -10,8 +10,9 @@ macOS must not carry the macOS user's numeric UID or GID into the Unraid host.
 
 ## Requirements
 
-Run the build on a Linux host when compiling OpenRGB. The package step also
-runs on macOS when an extracted AppDir is supplied. The package step needs:
+Run the package build on a Linux host when an AppImage is not already
+available. The package step also runs on macOS when an extracted AppDir is
+supplied. The package step needs:
 
 - Bash
 - `tar` with ownership override support
@@ -83,9 +84,9 @@ Install only a package that passes this check.
 
 The workflow at `.github/workflows/check-openrgb-updates.yml` checks the
 upstream OpenRGB release feed every six hours. It downloads the exact upstream
-source tag, builds the AppImage in the OpenRGB Linux CI image, creates the
-generic Unraid package and plugin file, verifies the package, and uploads the
-`.txz`, checksum, and `.plg` files to a new GitHub release.
+x86_64 AppImage, creates the generic Unraid package and plugin file, verifies
+the package, and uploads the `.txz`, checksum, and `.plg` files to a new GitHub
+release.
 
 Run the workflow manually with an existing upstream tag to retry a build or
 to package a specific release. The generated plugin uses the stable

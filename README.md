@@ -8,8 +8,8 @@ OpenRGB. It does not contain a copy or fork of the OpenRGB source code.
 GitHub Actions checks the upstream OpenRGB release feed every six hours. When
 it finds a stable release that this repository has not packaged, the workflow:
 
-1. Clones that exact OpenRGB tag from Codeberg.
-2. Builds the upstream AppImage in the OpenRGB Linux build image.
+1. Selects that exact OpenRGB release from Codeberg.
+2. Downloads the exact x86_64 AppImage from that upstream release.
 3. Creates a generic Unraid Slackware package.
 4. Creates a GitHub release with the package, checksum, and `openrgb.plg`.
 

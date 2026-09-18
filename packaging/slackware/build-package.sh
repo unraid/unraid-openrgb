@@ -215,7 +215,7 @@ if [ -n "$appimage" ]; then
     mkdir -p "$extract_dir"
     (
         cd "$extract_dir"
-        "$appimage" --appimage-extract >/dev/null
+        APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --appimage-extract >/dev/null
     )
     source_appdir="${extract_dir}/squashfs-root"
 fi

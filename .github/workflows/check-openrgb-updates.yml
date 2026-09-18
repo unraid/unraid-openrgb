@@ -24,7 +24,6 @@ jobs:
     env:
       UPSTREAM_REPOSITORY: OpenRGB/OpenRGB
       UPSTREAM_API: https://codeberg.org/api/v1/repos/OpenRGB/OpenRGB
-      BUILD_IMAGE: registry.gitlab.com/openrgbdevelopers/openrgb-linux-ci-deb-builder:trixie-amd64
 
     steps:
       - name: Check out the packaging files
@@ -56,6 +55,18 @@ jobs:
           [[ "$upstream_tag" =~ ^[A-Za-z0-9._-]+$ ]] \
             || { echo "Unsupported upstream tag: $upstream_tag" >&2; exit 1; }
 
+          upstream_appimages="$(jq -c '[.assets[]
+            | select(.name | startswith("OpenRGB_"))
+            | select(.name | contains("_x86_64_"))
+            | select(.name | endswith(".AppImage"))]' <<< "$release_json")"
+          [ "$(jq 'length' <<< "$upstream_appimages")" -eq 1 ] \
+            || { echo "Expected one upstream x86_64 AppImage for $upstream_tag." >&2; exit 1; }
+
+          upstream_appimage_name="$(jq -r '.[0].name' <<< "$upstream_appimages")"
+          upstream_appimage_url="$(jq -r '.[0].browser_download_url' <<< "$upstream_appimages")"
+          [[ "$upstream_appimage_url" =~ ^https://codeberg\.org/OpenRGB/OpenRGB/releases/download/[^/]+/OpenRGB_[A-Za-z0-9._-]+\.AppImage$ ]] \
+            || { echo "Unexpected upstream AppImage URL: $upstream_appimage_url" >&2; exit 1; }
+
           package_release_tag="openrgb-package-${upstream_tag}"
           package_exists=false
           if gh release view "$package_release_tag" --json assets --jq '.assets[].name' 2>/dev/null \
@@ -70,8 +81,10 @@ jobs:
 
           {
             printf 'UPSTREAM_TAG=%s\n' "$upstream_tag"
-            printf 'UPSTREAM_NAME=%s\n' "$(jq -r '.name' <<< "$release_json")"
             printf 'UPSTREAM_RELEASE_URL=https://codeberg.org/%s/releases/tag/%s\n' "$UPSTREAM_REPOSITORY" "$upstream_tag"
+            printf 'UPSTREAM_APPIMAGE_NAME=%s\n' "$upstream_appimage_name"
+            printf 'UPSTREAM_APPIMAGE_URL=%s\n' "$upstream_appimage_url"
+            printf 'UPSTREAM_PUBLISHED_AT=%s\n' "$(jq -r '.published_at' <<< "$release_json")"
             printf 'UPSTREAM_PRERELEASE=%s\n' "$upstream_prerelease"
             printf 'PACKAGE_RELEASE_TAG=%s\n' "$package_release_tag"
             printf 'PACKAGE_EXISTS=%s\n' "$package_exists"
@@ -79,13 +92,17 @@ jobs:
 
           printf 'Selected upstream OpenRGB release: %s\n' "$upstream_tag"
 
-      - name: Download the exact upstream source
+      - name: Download the exact upstream AppImage
         if: env.PACKAGE_EXISTS == 'false'
         shell: bash
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch "$UPSTREAM_TAG" --single-branch \
-            "https://codeberg.org/${UPSTREAM_REPOSITORY}.git" upstream
+          curl --fail --location --retry 3 --retry-all-errors \
+            --silent --show-error \
+            "$UPSTREAM_APPIMAGE_URL" \
+            --output OpenRGB-x86_64.AppImage
+          chmod 0755 OpenRGB-x86_64.AppImage
+          test -s OpenRGB-x86_64.AppImage
 
       - name: Read OpenRGB version
         if: env.PACKAGE_EXISTS == 'false'
@@ -93,15 +110,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          version="$(awk '
-            $1 == "MAJOR" { major = $3 }
-            $1 == "MINOR" { minor = $3 }
-            END {
-              if (major == "" || minor == "") exit 1
-              print major "." minor
-            }
-          ' upstream/OpenRGB.pro)"
-          epoch="$(git -C upstream show -s --format=%ct HEAD)"
+          version="$(sed -nE 's/^OpenRGB_([0-9]+([.][0-9]+)*)_x86_64_.*/\1/p' <<< "$UPSTREAM_APPIMAGE_NAME")"
+          [[ "$version" =~ ^[0-9]+([.][0-9]+)*$ ]] || {
+            echo "Could not read the OpenRGB version from $UPSTREAM_APPIMAGE_NAME" >&2
+            exit 1
+          }
+          epoch="$(date --date="$UPSTREAM_PUBLISHED_AT" +%s)"
           package_name="openrgb-${version}-x86_64-1_unraid.txz"
 
           {
@@ -110,25 +124,14 @@ jobs:
             printf 'PACKAGE_NAME=%s\n' "$package_name"
           } >> "$GITHUB_ENV"
 
-      - name: Build the package in the OpenRGB Linux CI image
+      - name: Build the package from the upstream AppImage
         if: env.PACKAGE_EXISTS == 'false'
         shell: bash
         run: |
           set -euxo pipefail
-
-          docker pull "$BUILD_IMAGE"
-          docker run --rm \
-            --env OPENRGB_VERSION \
-            --env SOURCE_DATE_EPOCH \
-            --volume "$GITHUB_WORKSPACE:/workspace" \
-            --workdir /workspace \
-            "$BUILD_IMAGE" \
-            bash -lc '
-              ./packaging/slackware/build-package.sh \
-                --build-appimage \
-                --source-root /workspace/upstream \
-                --version "$OPENRGB_VERSION"
-            '
+          packaging/slackware/build-package.sh \
+            --appimage OpenRGB-x86_64.AppImage \
+            --version "$OPENRGB_VERSION"
 
       - name: Generate the Unraid plugin file
         if: env.PACKAGE_EXISTS == 'false'
