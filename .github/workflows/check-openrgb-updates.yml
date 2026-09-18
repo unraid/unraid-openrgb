@@ -1,0 +1,190 @@
+name: Check for OpenRGB updates
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: Optional upstream tag; blank uses the newest stable release
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: openrgb-unraid-package-update
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Build the latest OpenRGB Unraid package
+    runs-on: ubuntu-24.04
+    env:
+      UPSTREAM_REPOSITORY: OpenRGB/OpenRGB
+      UPSTREAM_API: https://codeberg.org/api/v1/repos/OpenRGB/OpenRGB
+      BUILD_IMAGE: registry.gitlab.com/openrgbdevelopers/openrgb-linux-ci-deb-builder:trixie-amd64
+
+    steps:
+      - name: Check out the packaging files
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Select the newest upstream release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_UPSTREAM_TAG: ${{ inputs.upstream_tag }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "$REQUESTED_UPSTREAM_TAG" ]; then
+            release_json="$(curl --fail --location --retry 3 --retry-all-errors \
+              --silent --show-error \
+              "${UPSTREAM_API}/releases/tags/${REQUESTED_UPSTREAM_TAG}")"
+          else
+            release_json="$(curl --fail --location --retry 3 --retry-all-errors \
+              --silent --show-error \
+              "${UPSTREAM_API}/releases?limit=30" \
+              | jq -c '[.[] | select(.draft == false) | select(.tag_name | startswith("release_"))] | .[0]')"
+          fi
+          [ "$release_json" != "null" ] || { echo 'No upstream OpenRGB release was found.' >&2; exit 1; }
+
+          upstream_tag="$(jq -r '.tag_name' <<< "$release_json")"
+          [[ "$upstream_tag" =~ ^[A-Za-z0-9._-]+$ ]] \
+            || { echo "Unsupported upstream tag: $upstream_tag" >&2; exit 1; }
+
+          package_release_tag="openrgb-package-${upstream_tag}"
+          package_exists=false
+          if gh release view "$package_release_tag" --json assets --jq '.assets[].name' 2>/dev/null \
+              | grep --extended-regexp --line-regexp 'openrgb-.*\.txz' >/dev/null; then
+            package_exists=true
+          fi
+
+          upstream_prerelease="$(jq -r '.prerelease' <<< "$release_json")"
+          case "$upstream_tag" in
+            release_candidate_*) upstream_prerelease=true ;;
+          esac
+
+          {
+            printf 'UPSTREAM_TAG=%s\n' "$upstream_tag"
+            printf 'UPSTREAM_NAME=%s\n' "$(jq -r '.name' <<< "$release_json")"
+            printf 'UPSTREAM_RELEASE_URL=https://codeberg.org/%s/releases/tag/%s\n' "$UPSTREAM_REPOSITORY" "$upstream_tag"
+            printf 'UPSTREAM_PRERELEASE=%s\n' "$upstream_prerelease"
+            printf 'PACKAGE_RELEASE_TAG=%s\n' "$package_release_tag"
+            printf 'PACKAGE_EXISTS=%s\n' "$package_exists"
+          } >> "$GITHUB_ENV"
+
+          printf 'Selected upstream OpenRGB release: %s\n' "$upstream_tag"
+
+      - name: Download the exact upstream source
+        if: env.PACKAGE_EXISTS == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "$UPSTREAM_TAG" --single-branch \
+            "https://codeberg.org/${UPSTREAM_REPOSITORY}.git" upstream
+
+      - name: Read OpenRGB version
+        if: env.PACKAGE_EXISTS == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="$(awk '
+            $1 == "MAJOR" { major = $3 }
+            $1 == "MINOR" { minor = $3 }
+            END {
+              if (major == "" || minor == "") exit 1
+              print major "." minor
+            }
+          ' upstream/OpenRGB.pro)"
+          epoch="$(git -C upstream show -s --format=%ct HEAD)"
+          package_name="openrgb-${version}-x86_64-1_unraid.txz"
+
+          {
+            printf 'OPENRGB_VERSION=%s\n' "$version"
+            printf 'SOURCE_DATE_EPOCH=%s\n' "$epoch"
+            printf 'PACKAGE_NAME=%s\n' "$package_name"
+          } >> "$GITHUB_ENV"
+
+      - name: Build the package in the OpenRGB Linux CI image
+        if: env.PACKAGE_EXISTS == 'false'
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          docker pull "$BUILD_IMAGE"
+          docker run --rm \
+            --env OPENRGB_VERSION \
+            --env SOURCE_DATE_EPOCH \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            "$BUILD_IMAGE" \
+            bash -lc '
+              ./packaging/slackware/build-package.sh \
+                --build-appimage \
+                --source-root /workspace/upstream \
+                --version "$OPENRGB_VERSION"
+            '
+
+      - name: Generate the Unraid plugin file
+        if: env.PACKAGE_EXISTS == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          packaging/slackware/build-plugin.sh \
+            --version "$OPENRGB_VERSION" \
+            --repository "$GITHUB_REPOSITORY" \
+            --release-tag "$PACKAGE_RELEASE_TAG" \
+            --package "packaging/slackware/out/${PACKAGE_NAME}"
+
+      - name: Confirm package outputs
+        if: env.PACKAGE_EXISTS == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "packaging/slackware/out/${PACKAGE_NAME}"
+          test -s "packaging/slackware/out/${PACKAGE_NAME}.md5"
+          test -s packaging/slackware/out/openrgb.plg
+
+      - name: Create the package release
+        if: env.PACKAGE_EXISTS == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          release_flags=()
+          if [ "$UPSTREAM_PRERELEASE" = true ]; then
+            release_flags+=(--prerelease)
+          fi
+
+          if ! gh release view "$PACKAGE_RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$PACKAGE_RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "OpenRGB ${OPENRGB_VERSION} Unraid package (${UPSTREAM_TAG})" \
+              --notes "Built from upstream OpenRGB release ${UPSTREAM_TAG}.\n\nSource: ${UPSTREAM_RELEASE_URL}" \
+              "${release_flags[@]}"
+          fi
+
+      - name: Upload the package release assets
+        if: env.PACKAGE_EXISTS == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "$PACKAGE_RELEASE_TAG" \
+            "packaging/slackware/out/${PACKAGE_NAME}" \
+            "packaging/slackware/out/${PACKAGE_NAME}.md5" \
+            packaging/slackware/out/openrgb.plg \
+            --clobber
+
+      - name: Report that the package is current
+        if: env.PACKAGE_EXISTS == 'true'
+        shell: bash
+        run: printf 'Package release %s already exists.\n' "$PACKAGE_RELEASE_TAG"

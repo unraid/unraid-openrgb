@@ -1,0 +1,19 @@
+OpenRGB Slackware package
+=========================
+
+This package contains the OpenRGB AppDir and a small wrapper at
+/usr/bin/openrgb.
+
+The package keeps OpenRGB runtime libraries under
+/usr/libexec/openrgb/OpenRGB.AppDir. It does not replace system libraries,
+enable a service, or start a background process.
+
+The package installs the OpenRGB udev rules and reloads the rules after
+installation. Load the required I2C kernel modules before OpenRGB accesses
+motherboard controllers.
+
+Basic commands:
+
+  openrgb --version
+  openrgb --help
+  openrgb --noautoconnect --list-devices

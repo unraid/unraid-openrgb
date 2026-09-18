@@ -1,0 +1,10 @@
+openrgb: OpenRGB RGB lighting control
+openrgb:
+openrgb: OpenRGB is an open-source application for controlling RGB lighting
+openrgb: from compatible motherboards, peripherals, and other devices.
+openrgb:
+openrgb: This package contains the OpenRGB AppDir and a Slackware wrapper.
+openrgb: It does not start a background service.
+openrgb:
+openrgb: OpenRGB homepage: https://openrgb.org/
+openrgb: Source releases: https://codeberg.org/OpenRGB/OpenRGB/releases
