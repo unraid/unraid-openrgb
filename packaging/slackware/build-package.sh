@@ -198,6 +198,7 @@ if [ "$build_appimage" -eq 1 ]; then
         env -u SOURCE_DATE_EPOCH bash -c '
             source ./scripts/build-appimage.sh "$1"
             trap - EXIT
+            exit 0
         ' unraid-build-appimage "$qt"
     ); then
         build_status=0
