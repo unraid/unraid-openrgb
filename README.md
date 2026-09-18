@@ -21,7 +21,7 @@ module, so the package name does not include an Unraid kernel version.
 Install the latest plugin with:
 
 ```text
-https://github.com/SimonFair/unraid-openrgb/releases/latest/download/openrgb.plg
+https://github.com/unraid/unraid-openrgb/releases/latest/download/openrgb.plg
 ```
 
 The plugin installs the OpenRGB runtime, command wrapper, udev rule, and the
