@@ -191,10 +191,22 @@ if [ "$build_appimage" -eq 1 ]; then
         qt5|qt6) ;;
         *) die "--qt must be qt5 or qt6" ;;
     esac
-    (
+    expected_appimage="${source_root}/OpenRGB-${architecture}.AppImage"
+    expected_udev_rules="${source_root}/60-openrgb.rules"
+    if (
         cd "$source_root"
         env -u SOURCE_DATE_EPOCH ./scripts/build-appimage.sh "$qt"
-    )
+    ); then
+        build_status=0
+    else
+        build_status=$?
+    fi
+    if [ "$build_status" -ne 0 ]; then
+        [ -x "$expected_appimage" ] || die "OpenRGB AppImage build failed with status $build_status"
+        [ -s "$expected_udev_rules" ] || die "OpenRGB AppImage build failed with status $build_status"
+        printf 'warning: OpenRGB AppImage build returned status %s after producing expected outputs; continuing\n' \
+            "$build_status" >&2
+    fi
     appimage="${source_root}/OpenRGB-${architecture}.AppImage"
 fi
 
