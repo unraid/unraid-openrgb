@@ -199,6 +199,7 @@ jobs:
               ./packaging/slackware/build-package.sh \
                 --appimage /workspace/upstream/OpenRGB-x86_64.AppImage \
                 --source-root /workspace/upstream \
+                --udev-rules /workspace/upstream/60-openrgb.rules \
                 --version "$OPENRGB_VERSION"
             '
 
