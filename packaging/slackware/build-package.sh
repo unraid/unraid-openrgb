@@ -193,18 +193,17 @@ if [ "$build_appimage" -eq 1 ]; then
     esac
     expected_appimage="${source_root}/OpenRGB-${architecture}.AppImage"
     expected_udev_rules="${source_root}/60-openrgb.rules"
-    if (
+    set +e
+    (
         cd "$source_root"
         env -u SOURCE_DATE_EPOCH bash -c '
             source ./scripts/build-appimage.sh "$1"
             trap - EXIT
             exit 0
         ' unraid-build-appimage "$qt"
-    ); then
-        build_status=0
-    else
-        build_status=$?
-    fi
+    )
+    build_status=$?
+    set -e
     if [ "$build_status" -ne 0 ]; then
         [ -x "$expected_appimage" ] || die "OpenRGB AppImage build failed with status $build_status"
         [ -s "$expected_udev_rules" ] || die "OpenRGB AppImage build failed with status $build_status"
