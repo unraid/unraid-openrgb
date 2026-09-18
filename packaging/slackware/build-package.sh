@@ -266,7 +266,7 @@ output_dir="$(absolute_path "$output_dir")"
 
 tar_flavor="$(tar --version 2>&1 | sed -n '1p')"
 tar_args=(-c -J)
-if [[ "$tar_flavor" == GNU\ tar* ]]; then
+if [[ "$tar_flavor" == *"GNU tar"* ]]; then
     tar_args+=(--sort=name "--mtime=@${source_date_epoch}" --owner=0 --group=0 --numeric-owner)
 else
     tar_args+=(--uid 0 --gid 0 --uname root --gname root)
