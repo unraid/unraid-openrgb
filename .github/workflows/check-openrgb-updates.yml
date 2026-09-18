@@ -104,6 +104,14 @@ jobs:
           chmod 0755 OpenRGB-x86_64.AppImage
           test -s OpenRGB-x86_64.AppImage
 
+      - name: Install AppImage build dependency
+        if: env.PACKAGE_EXISTS == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libegl1
+
       - name: Read OpenRGB version
         if: env.PACKAGE_EXISTS == 'false'
         shell: bash
