@@ -162,6 +162,8 @@ jobs:
           set -euxo pipefail
           docker pull "$BUILD_IMAGE"
           docker run --rm \
+            --env DEB_HOST_ARCH=amd64 \
+            --env DEB_HOST_GNU_CPU=x86_64 \
             --env OPENRGB_VERSION \
             --env SOURCE_DATE_EPOCH \
             --volume "$GITHUB_WORKSPACE:/workspace" \
