@@ -11,6 +11,11 @@ release_tag=""
 package_path=""
 plugin_url=""
 output_dir="${SCRIPT_DIR}/out"
+plugin_title="OpenRGB"
+plugin_author="Unraid"
+plugin_support_url="https://github.com/unraid/unraid-openrgb/issues"
+plugin_icon="lightbulb-o"
+plugin_min_unraid="7.0.0"
 
 die() {
     printf 'error: %s\n' "$*" >&2
@@ -120,18 +125,31 @@ cat > "$plugin_path" <<EOF
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
 <!ENTITY name "openrgb">
-<!ENTITY author "OpenRGB">
+<!ENTITY title "${plugin_title}">
+<!ENTITY author "${plugin_author}">
 <!ENTITY version "${version}">
 <!ENTITY package "${package_name}">
 <!ENTITY packageMD5 "${package_md5}">
 <!ENTITY packageURL "${package_url}">
 <!ENTITY pluginURL "${plugin_url}">
 ]>
-<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
+<PLUGIN name="&name;" Title="&title;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="${plugin_min_unraid}" support="${plugin_support_url}" icon="${plugin_icon}">
+
+<DESCRIPTION>
+<![CDATA[
+OpenRGB controls supported RGB lighting devices from Unraid.
+This plugin installs the OpenRGB command-line runtime, udev rules, and wrapper command.
+It does not install kernel modules or replace system libraries.
+Project: https://openrgb.org/
+]]>
+</DESCRIPTION>
 
 <CHANGES>
+<![CDATA[
 ###&version;
 - Install OpenRGB for Unraid.
+- Add plugin metadata and support links.
+]]>
 </CHANGES>
 
 <FILE Run="/bin/bash">
