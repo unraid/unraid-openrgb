@@ -254,9 +254,6 @@ chmod 0755 "${stage}/usr/bin/openrgb"
 
 if [ -n "$udev_rules" ]; then
     cp "$udev_rules" "${stage}/etc/udev/rules.d/60-openrgb.rules"
-elif [ -n "$appimage" ]; then
-    APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --print-udev-rules \
-        > "${stage}/etc/udev/rules.d/60-openrgb.rules"
 else
     "${source_appdir}/AppRun" --print-udev-rules \
         > "${stage}/etc/udev/rules.d/60-openrgb.rules"
