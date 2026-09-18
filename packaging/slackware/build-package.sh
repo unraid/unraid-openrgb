@@ -174,7 +174,7 @@ if [ "$build_appimage" -eq 1 ]; then
     esac
     (
         cd "$source_root"
-        ./scripts/build-appimage.sh "$qt"
+        env -u SOURCE_DATE_EPOCH ./scripts/build-appimage.sh "$qt"
     )
     appimage="${source_root}/OpenRGB-${architecture}.AppImage"
 fi
