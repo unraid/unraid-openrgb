@@ -211,13 +211,23 @@ trap cleanup EXIT
 
 source_appdir="$appdir"
 if [ -n "$appimage" ]; then
-    extract_dir="${temp_dir}/appimage"
+    extract_root="${temp_dir}/appimage"
+    extract_dir="${extract_root}/standard"
     mkdir -p "$extract_dir"
-    (
+    if (
         cd "$extract_dir"
-        APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --appimage-extract >/dev/null
-    )
-    source_appdir="${extract_dir}/squashfs-root"
+        "$appimage" --appimage-extract >/dev/null
+    ); then
+        source_appdir="${extract_dir}/squashfs-root"
+    else
+        extract_dir="${extract_root}/no-fuse"
+        mkdir -p "$extract_dir"
+        (
+            cd "$extract_dir"
+            APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --appimage-extract >/dev/null
+        )
+        source_appdir="${extract_dir}/squashfs-root"
+    fi
 fi
 
 [ -x "${source_appdir}/AppRun" ] || die "AppDir is missing an executable AppRun: $source_appdir"
