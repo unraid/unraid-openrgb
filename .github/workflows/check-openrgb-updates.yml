@@ -162,7 +162,8 @@ jobs:
         run: |
           set -euxo pipefail
           docker pull "$BUILD_IMAGE"
-          docker run --rm \
+          container_name="openrgb-prerelease-${GITHUB_RUN_ID}"
+          docker create --name "$container_name" \
             --env DEB_HOST_ARCH=amd64 \
             --env DEB_HOST_GNU_CPU=x86_64 \
             --env OPENRGB_VERSION \
@@ -178,6 +179,19 @@ jobs:
                 --source-root /workspace/upstream \
                 --version "$OPENRGB_VERSION"
             '
+          set +e
+          docker start --attach "$container_name"
+          start_status=$?
+          set -e
+          container_status="$(docker wait "$container_name")"
+          docker rm "$container_name" >/dev/null
+          if [ "$container_status" -ne 0 ]; then
+            exit "$container_status"
+          fi
+          if [ "$start_status" -ne 0 ]; then
+            printf 'warning: docker attach returned status %s after the container exited successfully\n' \
+              "$start_status" >&2
+          fi
 
       - name: Generate the Unraid plugin file
         if: env.PACKAGE_EXISTS == 'false'
