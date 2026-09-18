@@ -195,7 +195,10 @@ if [ "$build_appimage" -eq 1 ]; then
     expected_udev_rules="${source_root}/60-openrgb.rules"
     if (
         cd "$source_root"
-        env -u SOURCE_DATE_EPOCH ./scripts/build-appimage.sh "$qt"
+        env -u SOURCE_DATE_EPOCH bash -c '
+            source ./scripts/build-appimage.sh "$1"
+            trap - EXIT
+        ' unraid-build-appimage "$qt"
     ); then
         build_status=0
     else
