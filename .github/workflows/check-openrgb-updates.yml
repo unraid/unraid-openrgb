@@ -68,17 +68,22 @@ jobs:
           [[ "$upstream_appimage_url" =~ ^https://codeberg\.org/OpenRGB/OpenRGB/releases/download/[^/]+/OpenRGB_[A-Za-z0-9._-]+\.AppImage$ ]] \
             || { echo "Unexpected upstream AppImage URL: $upstream_appimage_url" >&2; exit 1; }
 
+          upstream_prerelease="$(jq -r '.prerelease' <<< "$release_json")"
+          case "$upstream_tag" in
+            release_candidate_*) upstream_prerelease=true ;;
+          esac
+
           package_release_tag="openrgb-package-${upstream_tag}"
+          if [ "$upstream_prerelease" = true ]; then
+            # Keep a new patched preview separate from the earlier unpatched RC.
+            package_release_tag+="-carbon-working-leds-1"
+          fi
+
           package_exists=false
           if gh release view "$package_release_tag" --json assets --jq '.assets[].name' 2>/dev/null \
               | grep --extended-regexp --line-regexp 'openrgb-.*\.txz' >/dev/null; then
             package_exists=true
           fi
-
-          upstream_prerelease="$(jq -r '.prerelease' <<< "$release_json")"
-          case "$upstream_tag" in
-            release_candidate_*) upstream_prerelease=true ;;
-          esac
 
           {
             printf 'UPSTREAM_TAG=%s\n' "$upstream_tag"
