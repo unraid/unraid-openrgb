@@ -1,16 +1,312 @@
 diff --git a/Controllers/MSIMysticLightController/MSIMysticLight761Controller/MSIMysticLight761Controller.cpp b/Controllers/MSIMysticLightController/MSIMysticLight761Controller/MSIMysticLight761Controller.cpp
-index e2f3cb7..beb43f1 100644
+index e2f3cb70..c96753e0 100644
 --- a/Controllers/MSIMysticLightController/MSIMysticLight761Controller/MSIMysticLight761Controller.cpp
 +++ b/Controllers/MSIMysticLightController/MSIMysticLight761Controller/MSIMysticLight761Controller.cpp
-@@ -73,4 +73,5 @@ static const std::string board_names[] =
+@@ -26,6 +26,11 @@
+ #define ARRAY_ROW_RAW(X, Y) X*16 + Y
+ #define SETUP_ARRAY_SIZE 290
+ 
++static constexpr std::size_t CARBON_IO_LED_COUNT      = 11;
++static constexpr std::size_t CARBON_M2_LED_COUNT      = 6;
++static constexpr std::size_t CARBON_JRGB1_LED_COUNT   = 1;
++static constexpr std::size_t CARBON_ONBOARD_LED_COUNT = CARBON_IO_LED_COUNT + CARBON_M2_LED_COUNT + CARBON_JRGB1_LED_COUNT;
++
+ struct mystic_light_761_config
+ {
+     const std::string *                      name;                  // Name of the board
+@@ -45,6 +50,17 @@ static const std::vector<MSI_ZONE> zone_set1 =
+         MSI_ZONE_JARGB_3,
+ };
+ 
++static const std::vector<MSI_ZONE> zone_set_carbon =
++{
++        MSI_ZONE_JAF,
++        MSI_ZONE_JARGB_1,
++        MSI_ZONE_JARGB_2,
++        MSI_ZONE_JARGB_3,
++        MSI_ZONE_J_PIPE_1,
++        MSI_ZONE_J_PIPE_3,
++        MSI_ZONE_J_RGB_1,
++};
++
+ static const std::string board_names[] =
+ {
+     "MSI MAG X870 TOMAHAWK WIFI (MS-7E51)",
+@@ -73,6 +89,7 @@ static const std::string board_names[] =
      "MSI MEG Z890 UNIFY-X (MS-7E20)",
      "MSI PRO X870E-S EVO WIFI (MS-7E86)",
      "MSI PRO Z890-P WIFI (MS-7E34)",
 +    "MSI MPG Z890 CARBON WIFI (MS-7E17)",
  };
-@@ -103,4 +103,5 @@ static const mystic_light_761_config board_configs[] =
+ 
+ static const mystic_light_761_config board_configs[] =
+@@ -103,6 +120,7 @@ static const mystic_light_761_config board_configs[] =
      { &(board_names[23]), 0,  0,  0, 1, &zone_set1,  MSIMysticLight761Controller::DIRECT_MODE_ZONE_BASED },     // MSI MEG Z890 UNIFY-X (MS-7E20)
      { &(board_names[24]), 0,  0,  0, 1, &zone_set1,  MSIMysticLight761Controller::DIRECT_MODE_ZONE_BASED },     // MSI PRO X870E-S EVO WIFI (MS-7E86)
      { &(board_names[25]), 0,  0,  0, 1, &zone_set1,  MSIMysticLight761Controller::DIRECT_MODE_ZONE_BASED },     // MSI PRO Z890-P WIFI (MS-7E34)
-+    { &(board_names[26]), 0,  0,  0, 1, &zone_set1,  MSIMysticLight761Controller::DIRECT_MODE_ZONE_BASED },     // MSI MPG Z890 CARBON WIFI (MS-7E17)
++    { &(board_names[26]), 0,  0,  0, 1, &zone_set_carbon, MSIMysticLight761Controller::DIRECT_MODE_PER_LED }, // MSI MPG Z890 CARBON WIFI (MS-7E17)
  };
+ 
+ enum MSI_ZONE setup_map [] =
+@@ -190,6 +208,27 @@ void init_packet(FeaturePacket_Zone_761 * packet)
+ 
+ }
+ 
++unsigned int get_zone_dirty_bit(MSI_ZONE zone)
++{
++    switch(zone)
++    {
++    case MSI_ZONE_JAF:
++        return 1u << 0;
++    case MSI_ZONE_JARGB_1:
++        return 1u << 1;
++    case MSI_ZONE_JARGB_2:
++        return 1u << 2;
++    case MSI_ZONE_JARGB_3:
++        return 1u << 3;
++    case MSI_ZONE_J_PIPE_1:
++    case MSI_ZONE_J_PIPE_3:
++    case MSI_ZONE_J_RGB_1:
++        return 1u << 4;
++    default:
++        return 0;
++    }
++}
++
+ MSIMysticLight761Controller::MSIMysticLight761Controller
+     (
+     hid_device*     handle,
+@@ -284,6 +323,7 @@ MSIMysticLight761Controller::MSIMysticLight761Controller
+             data->jargb1.zone           = MSI_ZONE_JARGB_1;
+             data->jargb2.zone           = MSI_ZONE_JARGB_2;
+             data->jargb3.zone           = MSI_ZONE_JARGB_3;
++            data->onboard.zone          = MSI_ZONE_NONE;
+ 
+             data->jaf.packet.hdr0       = 0x08;
+             data->jargb1.packet.hdr0    = 0x04;
+@@ -294,11 +334,15 @@ MSIMysticLight761Controller::MSIMysticLight761Controller
+             data->jargb1.packet.hdr1    = 0x00;
+             data->jargb2.packet.hdr1    = 0x01;
+             data->jargb3.packet.hdr1    = 0x02;
++            data->onboard.packet.hdr0  = 0x06;
++            data->onboard.packet.hdr1  = 0x00;
+ 
+             init_packet(&data->jaf);
+             init_packet(&data->jargb1);
+             init_packet(&data->jargb2);
+             init_packet(&data->jargb3);
++            init_packet(&data->onboard);
++            data->onboard.packet.hdr2 = CARBON_ONBOARD_LED_COUNT;
+         }
+ 
+         free(conf_arr);
+@@ -388,25 +432,35 @@ bool MSIMysticLight761Controller::Update
+ {
+     int ret = 0;
+     bool flag = true;
+-    ret = hid_send_feature_report(dev, GET_CHAR_PTR_REF(data->jaf.packet) , sizeof(FeaturePacket_PerLED_761));
+-    if(ret < 0)
+-    {
+-        flag = false;
+-    }
+-    ret = hid_send_feature_report(dev, GET_CHAR_PTR_REF(data->jargb1.packet) , sizeof(FeaturePacket_PerLED_761));
+-    if(ret < 0)
++    FeaturePacket_Zone_761* packets[] =
+     {
+-        flag = false;
+-    }
+-    ret = hid_send_feature_report(dev, GET_CHAR_PTR_REF(data->jargb2.packet) , sizeof(FeaturePacket_PerLED_761));
+-    if(ret < 0)
+-    {
+-        flag = false;
+-    }
+-    ret = hid_send_feature_report(dev, GET_CHAR_PTR_REF(data->jargb3.packet) , sizeof(FeaturePacket_PerLED_761));
+-    if(ret < 0)
++        &data->jaf,
++        &data->jargb1,
++        &data->jargb2,
++        &data->jargb3,
++        &data->onboard,
++    };
++
++    for(std::size_t i = 0; i < (sizeof(packets) / sizeof(packets[0])); ++i)
+     {
+-        flag = false;
++        unsigned int dirty_bit = 1u << i;
++        if((dirty_zones & dirty_bit) == 0)
++        {
++            continue;
++        }
++
++        ret = hid_send_feature_report(dev, GET_CHAR_PTR_REF(packets[i]->packet), sizeof(FeaturePacket_PerLED_761));
++        if(ret < 0)
++        {
++            flag = false;
++        }
++        else
++        {
++            unsigned char response[sizeof(FeaturePacket_PerLED_761)] = {};
++            response[0] = 0x51;
++            hid_get_feature_report(dev, response, sizeof(response));
++            dirty_zones &= ~dirty_bit;
++        }
+     }
+ 
+     return flag;
+@@ -433,13 +487,14 @@ void MSIMysticLight761Controller::SetZoneColor
+             zone_configs[i].zone_data->color2.R = red2;
+             zone_configs[i].zone_data->color2.G = grn2;
+             zone_configs[i].zone_data->color2.B = blu2;
++            dirty_zones |= get_zone_dirty_bit(zone);
+         }
+     }
+ }
+ 
+ void set_data_color(FeaturePacket_Zone_761 * packet, std::size_t index, unsigned char color_val  )
+ {
+-    if(packet == nullptr)
++    if(packet == nullptr || index >= NUM_LEDS_761)
+     {
+         return;
+     }
+@@ -456,6 +511,7 @@ void MSIMysticLight761Controller::SetLedColor
+     )
+ {
+     FeaturePacket_Zone_761 * ptr = nullptr;
++    std::size_t packet_led_index = index;
+     switch(zone)
+     {
+     case MSI_ZONE_JAF:
+@@ -470,18 +526,36 @@ void MSIMysticLight761Controller::SetLedColor
+     case MSI_ZONE_JARGB_3:
+         ptr = &data->jargb3;
+         break;
+-    default:
++    case MSI_ZONE_J_PIPE_1:
++        ptr = &data->onboard;
++        break;
++    case MSI_ZONE_J_PIPE_3:
++        ptr = &data->onboard;
++        packet_led_index += CARBON_IO_LED_COUNT;
+         break;
++    case MSI_ZONE_J_RGB_1:
++        ptr = &data->onboard;
++        packet_led_index += CARBON_IO_LED_COUNT + CARBON_M2_LED_COUNT;
++        break;
++    default:
++        return;
+     }
+ 
+-    std::size_t candidate_index = (index * 3);
++    if(index >= GetMaxDirectLeds(zone))
++    {
++        return;
++    }
+ 
+-    if((candidate_index + 2) <= GetMaxDirectLeds(zone))
++    std::size_t candidate_index = packet_led_index * 3;
++    if((candidate_index + 2) >= NUM_LEDS_761)
+     {
+-        set_data_color(ptr, candidate_index,     red);
+-        set_data_color(ptr, candidate_index + 1, grn);
+-        set_data_color(ptr, candidate_index + 2, blu);
++        return;
+     }
++
++    set_data_color(ptr, candidate_index,     red);
++    set_data_color(ptr, candidate_index + 1, grn);
++    set_data_color(ptr, candidate_index + 2, blu);
++    dirty_zones |= get_zone_dirty_bit(zone);
+ }
+ 
+ ZoneData *MSIMysticLight761Controller::GetZoneData
+@@ -588,11 +662,36 @@ void MSIMysticLight761Controller::GetMode
+ 
+ void MSIMysticLight761Controller::SetCycleCount
+     (
+-    MSI_ZONE        /*zone*/,
+-    unsigned char   /*cycle_num*/
++    MSI_ZONE        zone,
++    unsigned char   cycle_num
+     )
+ {
+-    return;
++    FeaturePacket_Zone_761 * packet = nullptr;
++
++    switch(zone)
++    {
++    case MSI_ZONE_JAF:
++        packet = &data->jaf;
++        break;
++    case MSI_ZONE_JARGB_1:
++        packet = &data->jargb1;
++        break;
++    case MSI_ZONE_JARGB_2:
++        packet = &data->jargb2;
++        break;
++    case MSI_ZONE_JARGB_3:
++        packet = &data->jargb3;
++        break;
++    default:
++        return;
++    }
++
++    unsigned char previous_count = packet->packet.hdr2;
++    packet->packet.hdr2 = cycle_num;
++    if(previous_count != cycle_num && (previous_count != 240 || cycle_num != 0))
++    {
++        dirty_zones |= get_zone_dirty_bit(zone);
++    }
+ }
+ 
+ void MSIMysticLight761Controller::SetDirectMode
+@@ -621,6 +720,12 @@ size_t MSIMysticLight761Controller::GetMaxDirectLeds
+         case MSI_ZONE_JARGB_3:
+             return 240;
+             break;
++        case MSI_ZONE_J_PIPE_1:
++            return CARBON_IO_LED_COUNT;
++        case MSI_ZONE_J_PIPE_3:
++            return CARBON_M2_LED_COUNT;
++        case MSI_ZONE_J_RGB_1:
++            return CARBON_JRGB1_LED_COUNT;
+         default:
+             return 1;
+     }
+diff --git a/Controllers/MSIMysticLightController/MSIMysticLight761Controller/MSIMysticLight761Controller.h b/Controllers/MSIMysticLightController/MSIMysticLight761Controller/MSIMysticLight761Controller.h
+index c9eab05d..4e43dc89 100644
+--- a/Controllers/MSIMysticLightController/MSIMysticLight761Controller/MSIMysticLight761Controller.h
++++ b/Controllers/MSIMysticLightController/MSIMysticLight761Controller/MSIMysticLight761Controller.h
+@@ -136,6 +136,7 @@ private:
+     std::string                                             version_aprom;
+     std::string                                             version_ldrom;
+     FeaturePacket_761* data;
++    unsigned int                                             dirty_zones = 0;
+ 
+     bool            ReadSettings();
+     bool            ReadFwVersion();
+diff --git a/Controllers/MSIMysticLightController/MSIMysticLight761Controller/RGBController_MSIMysticLight761.cpp b/Controllers/MSIMysticLightController/MSIMysticLight761Controller/RGBController_MSIMysticLight761.cpp
+index 50eeedc9..f908fb12 100644
+--- a/Controllers/MSIMysticLightController/MSIMysticLight761Controller/RGBController_MSIMysticLight761.cpp
++++ b/Controllers/MSIMysticLightController/MSIMysticLight761Controller/RGBController_MSIMysticLight761.cpp
+@@ -27,6 +27,8 @@ const ZoneDescription led_zones[] =
+     ZoneDescription{ "JARGB 1",     MSI_ZONE_JARGB_1 },
+     ZoneDescription{ "JARGB 2",     MSI_ZONE_JARGB_2 },
+     ZoneDescription{ "JARGB 3",     MSI_ZONE_JARGB_3 },
++    ZoneDescription{ "IO Shield",   MSI_ZONE_J_PIPE_1  },
++    ZoneDescription{ "Carbon M.2",  MSI_ZONE_J_PIPE_3  },
+ };
+ 
+ static std::vector<const ZoneDescription*> zone_description;
+diff --git a/Controllers/MSIMysticLightController/MSIMysticLightCommon.h b/Controllers/MSIMysticLightController/MSIMysticLightCommon.h
+index 18563fc0..10b28609 100644
+--- a/Controllers/MSIMysticLightController/MSIMysticLightCommon.h
++++ b/Controllers/MSIMysticLightController/MSIMysticLightCommon.h
+@@ -273,6 +273,7 @@ struct FeaturePacket_761
+     FeaturePacket_Zone_761 jargb2;
+     FeaturePacket_Zone_761 jargb3;
+     FeaturePacket_Zone_761 jaf;
++    FeaturePacket_Zone_761 onboard;
+ };
+ 
+ #define MSI_USB_PID_COMMON  0x0076      // Common PID for a certain set of 185-byte boards

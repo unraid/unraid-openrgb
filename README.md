@@ -35,6 +35,10 @@ as `release_1.0`. Leave the field empty to use the newest stable release. A
 prerelease tag such as `release_candidate_1.0rc3.1` creates a separate GitHub
 prerelease and applies the MSI Z890 Carbon WiFi mapping patch.
 
+The current MSI MPG Z890 Carbon WiFi patch covers the tested ARGB1, ARGB2, IO
+Shield, and Carbon M.2 paths. ARGB3 remains on the existing controller path
+while MSI feedback is pending.
+
 The workflow is the supported release path. For a local Linux build, provide
 an OpenRGB source checkout explicitly:
 
