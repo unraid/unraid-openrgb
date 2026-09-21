@@ -285,11 +285,33 @@ mkdir -p \
     "${stage}/usr/libexec/openrgb" \
     "${stage}/usr/share/doc/openrgb-1.0"
 
+# The archive's `./` entry becomes the target filesystem root when Slackware
+# installs the package. Keep that entry root-readable and searchable instead
+# of inheriting mktemp's private-directory mode.
+chmod 0755 "$stage"
+
 cp -a "$source_appdir" "${stage}/usr/libexec/openrgb/OpenRGB.AppDir"
 cp "${SCRIPT_DIR}/doinst.sh" "${stage}/install/doinst.sh"
 cp "${SCRIPT_DIR}/slack-desc" "${stage}/install/slack-desc"
 cp "${SCRIPT_DIR}/README.openrgb" "${stage}/usr/share/doc/openrgb-1.0/README.openrgb"
 chmod 0755 "${stage}/install/doinst.sh"
+
+cat > "${stage}/usr/libexec/openrgb/OpenRGB.AppDir/AppRun" <<'EOF'
+#!/bin/sh
+set -eu
+
+appdir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+libdir="$appdir/usr/lib"
+
+if [ -n "${LD_LIBRARY_PATH:-}" ]; then
+    export LD_LIBRARY_PATH="$libdir:$LD_LIBRARY_PATH"
+else
+    export LD_LIBRARY_PATH="$libdir"
+fi
+
+exec "$appdir/usr/bin/OpenRGB" "$@"
+EOF
+chmod 0755 "${stage}/usr/libexec/openrgb/OpenRGB.AppDir/AppRun"
 
 cat > "${stage}/usr/bin/openrgb" <<'EOF'
 #!/bin/sh

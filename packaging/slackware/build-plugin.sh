@@ -104,6 +104,10 @@ fi
 
 [ -f "$package_path" ] || die "package does not exist: $package_path"
 
+package_verifier="${SCRIPT_DIR}/verify-package.sh"
+[ -x "$package_verifier" ] || die "package verifier is missing or not executable: $package_verifier"
+"$package_verifier" "$package_path"
+
 package_name="$(basename "$package_path")"
 expected_package="openrgb-${version}-x86_64-1_unraid.txz"
 [ "$package_name" = "$expected_package" ] \
